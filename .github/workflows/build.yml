@@ -1,4 +1,4 @@
-name: Build Android APK (Buildozer - Docker)
+name: Build Android APK (Buildozer - Docker, pinned)
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: kivy/buildozer
+      image: kivy/buildozer:2024.05.1
     steps:
       - name: Checkout
         uses: actions/checkout@v4
