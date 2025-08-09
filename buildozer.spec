@@ -4,6 +4,10 @@ title = Prazzers Score
 package.name = prazzersscore
 package.domain = club.prazzers
 source.dir = .
+android.api = 34
+android.minapi = 21
+android.accept_sdk_license = True
+
 source.include_exts = py,kv,png,jpg,ttf,wav,mp3,ogg,json
 version = 0.1.0
 requirements = python3,kivy
