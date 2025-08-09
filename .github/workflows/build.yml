@@ -1,9 +1,9 @@
 name: Build Android APK (Buildozer - native Ubuntu)
 
 on:
-  workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -11,37 +11,98 @@ jobs:
 
     steps:
       - name: Checkout
+      # ia sursa (inclusiv assets și buildozer.spec)
         uses: actions/checkout@v4
 
-      - name: Install system deps
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Cache Buildozer/.buildozer
+        uses: actions/cache@v4
+        with:
+          path: |
+            .buildozer
+            ~/.buildozer
+          key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            ${{ runner.os }}-buildozer-
+
+      - name: System deps (native)
         run: |
-          sudo dpkg --add-architecture i386
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential git zip unzip python3 python3-pip python3-venv \
-            openjdk-17-jdk libffi-dev libssl-dev \
-            libncurses5:i386 libstdc++6:i386 zlib1g:i386 libc6:i386
+            zip unzip git libffi-dev libssl-dev \
+            liblzo2-dev liblzma-dev zlib1g-dev \
+            autoconf automake libtool pkg-config \
+            libjpeg-dev libfreetype6-dev
 
-      - name: Setup Python venv
+      - name: Install Buildozer & tools
         run: |
-          python3 -m venv .venv
-          source .venv/bin/activate
-          python -m pip install --upgrade pip
-          pip install "cython<3" buildozer
+          python -m pip install --upgrade pip wheel
+          # Versiuni stabile; poți scoate pin-urile dacă vrei mereu ultimul release
+          pip install "Cython>=0.29.36" "buildozer>=1.5.0" "python-for-android>=2024.06.24"
 
-      - name: Show versions
+      - name: Set up JDK 17 (required by AGP/Gradle)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Force NDK r25b for p4a
         run: |
-          source .venv/bin/activate
-          python --version
-          buildozer --version
+          echo "ANDROID_NDK=$HOME/.buildozer/android/platform/android-ndk-r25b" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$HOME/.buildozer/android/platform/android-ndk-r25b" >> $GITHUB_ENV
+          echo "ANDROID_NDK_ROOT=$HOME/.buildozer/android/platform/android-ndk-r25b" >> $GITHUB_ENV
+
+      - name: Make Buildozer more verbose + Gradle RAM
+        run: |
+          # asigură-te că avem buildozer.spec
+          test -f buildozer.spec
+          # setează log_level = 2 (verbose) dacă nu e deja
+          sed -i 's/^#\? *log_level *= *.*/log_level = 2/' buildozer.spec
+          # dezactivează gradle daemon (mai stabil in CI) și alocă memorie
+          echo "GRADLE_OPTS=-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs='-Xmx4g'" >> $GITHUB_ENV
 
       - name: Build APK (debug)
+        env:
+          # Buildozer își va instala singur SDK/NDK în ~/.buildozer
+          ANDROIDSDK: ${{ env.ANDROIDSDK }}
         run: |
-          source .venv/bin/activate
-          buildozer android debug
+          python -m buildozer -v android debug
 
-      - name: Upload APK artifact
+      - name: Find APKs
+        id: findapk
+        run: |
+          shopt -s globstar nullglob
+          # câteva căi posibile, în funcție de p4a/gradle
+          FILES=()
+          FILES+=(.buildozer/android/platform/build-*/dists/*/build/outputs/apk/debug/*-debug*.apk)
+          FILES+=(.buildozer/android/platform/build-*/dists/*/bin/*.apk)
+          FILES+=(bin/*.apk)
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "No APK found" >&2
+            exit 1
+          fi
+          printf "%s\n" "${FILES[@]}" > apk_list.txt
+          echo "count=${#FILES[@]}" >> $GITHUB_OUTPUT
+
+      - name: Upload APK(s)
         uses: actions/upload-artifact@v4
         with:
-          name: prazzers-score-apk
-          path: bin/*.apk
+          name: Prazzers-Score-APK
+          path: |
+            apk_list.txt
+            .buildozer/android/platform/build-*/dists/*/build/outputs/apk/debug/*-debug*.apk
+            .buildozer/android/platform/build-*/dists/*/bin/*.apk
+            bin/*.apk
+          if-no-files-found: error
