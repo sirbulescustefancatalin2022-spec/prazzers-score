@@ -11,7 +11,7 @@ jobs:
 
     steps:
       - name: Checkout
-      # ia sursa (inclusiv assets și buildozer.spec)
+        # ia sursa (inclusiv assets și buildozer.spec)
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -23,7 +23,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          key: ${{ runner.os }}-pip-v1-${{ hashFiles('**/requirements*.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
@@ -33,7 +33,7 @@ jobs:
           path: |
             .buildozer
             ~/.buildozer
-          key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec') }}
+          key: ${{ runner.os }}-buildozer-v1-${{ hashFiles('buildozer.spec') }}
           restore-keys: |
             ${{ runner.os }}-buildozer-
 
@@ -49,8 +49,10 @@ jobs:
       - name: Install Buildozer & tools
         run: |
           python -m pip install --upgrade pip wheel
-          # Versiuni stabile; poți scoate pin-urile dacă vrei mereu ultimul release
-          pip install "Cython>=0.29.36" "buildozer>=1.5.0" "python-for-android>=2024.06.24"
+          pip install "setuptools==69.5.1"
+          pip install "Cython==0.29.36" "buildozer==1.5.0" "python-for-android==2024.1.21"
+          python -m buildozer --version
+          python -c "import sys, p4a; print('python-for-android:', getattr(p4a, '__version__', 'unknown'))"
 
       - name: Set up JDK 17 (required by AGP/Gradle)
         uses: actions/setup-java@v4
@@ -99,10 +101,3 @@ jobs:
       - name: Upload APK(s)
         uses: actions/upload-artifact@v4
         with:
-          name: Prazzers-Score-APK
-          path: |
-            apk_list.txt
-            .buildozer/android/platform/build-*/dists/*/build/outputs/apk/debug/*-debug*.apk
-            .buildozer/android/platform/build-*/dists/*/bin/*.apk
-            bin/*.apk
-          if-no-files-found: error
