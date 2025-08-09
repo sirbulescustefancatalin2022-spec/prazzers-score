@@ -52,52 +52,14 @@ jobs:
           pip install "setuptools==69.5.1"
           pip install "Cython==0.29.36" "buildozer==1.5.0" "python-for-android==2024.1.21"
           python -m buildozer --version
-          python -c "import sys, p4a; print('python-for-android:', getattr(p4a, '__version__', 'unknown'))"
+          python - << 'PY'
+import importlib, sys
+m = importlib.import_module("p4a")
+print("python-for-android:", getattr(m, "__version__", "unknown"))
+PY
 
       - name: Set up JDK 17 (required by AGP/Gradle)
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
-
-      - name: Force NDK r25b for p4a
-        run: |
-          echo "ANDROID_NDK=$HOME/.buildozer/android/platform/android-ndk-r25b" >> $GITHUB_ENV
-          echo "ANDROID_NDK_HOME=$HOME/.buildozer/android/platform/android-ndk-r25b" >> $GITHUB_ENV
-          echo "ANDROID_NDK_ROOT=$HOME/.buildozer/android/platform/android-ndk-r25b" >> $GITHUB_ENV
-
-      - name: Make Buildozer more verbose + Gradle RAM
-        run: |
-          # asigură-te că avem buildozer.spec
-          test -f buildozer.spec
-          # setează log_level = 2 (verbose) dacă nu e deja
-          sed -i 's/^#\? *log_level *= *.*/log_level = 2/' buildozer.spec
-          # dezactivează gradle daemon (mai stabil in CI) și alocă memorie
-          echo "GRADLE_OPTS=-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs='-Xmx4g'" >> $GITHUB_ENV
-
-      - name: Build APK (debug)
-        env:
-          # Buildozer își va instala singur SDK/NDK în ~/.buildozer
-          ANDROIDSDK: ${{ env.ANDROIDSDK }}
-        run: |
-          python -m buildozer -v android debug
-
-      - name: Find APKs
-        id: findapk
-        run: |
-          shopt -s globstar nullglob
-          # câteva căi posibile, în funcție de p4a/gradle
-          FILES=()
-          FILES+=(.buildozer/android/platform/build-*/dists/*/build/outputs/apk/debug/*-debug*.apk)
-          FILES+=(.buildozer/android/platform/build-*/dists/*/bin/*.apk)
-          FILES+=(bin/*.apk)
-          if [ ${#FILES[@]} -eq 0 ]; then
-            echo "No APK found" >&2
-            exit 1
-          fi
-          printf "%s\n" "${FILES[@]}" > apk_list.txt
-          echo "count=${#FILES[@]}" >> $GITHUB_OUTPUT
-
-      - name: Upload APK(s)
-        uses: actions/upload-artifact@v4
-        with:
+          java-version:
